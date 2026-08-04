@@ -1,7 +1,9 @@
 #ppc_collection_workspace,
 #ppc_collection_status,
 #ppc_llm_handoff,
-#ppc_export_result {
+#ppc_export_result,
+#ppc_records_section,
+#ppc_errors_section {
     --ppc-border: var(--block-border-color, #c9cdd3);
     --ppc-surface: var(--block-background-fill, #ffffff);
     --ppc-surface-muted: var(--background-fill-secondary, #f5f6f7);
@@ -111,13 +113,21 @@
     letter-spacing: 0;
 }
 
-#ppc_result textarea {
-    min-height: 16rem;
-    line-height: 1.6;
+#ppc_prompt_records {
+    max-width: 100%;
+    overflow-x: auto;
 }
 
-#ppc_summary table {
+#ppc_prompt_records table {
+    min-width: 760px;
+    table-layout: fixed;
     font-variant-numeric: tabular-nums;
+}
+
+#ppc_prompt_records td,
+#ppc_prompt_records th {
+    white-space: normal;
+    overflow-wrap: anywhere;
 }
 
 @media (max-width: 900px) {
@@ -145,5 +155,9 @@
     .ppc-llm-controls button {
         width: 100%;
         min-height: 2.75rem;
+    }
+
+    #ppc_prompt_records table {
+        min-width: 680px;
     }
 }

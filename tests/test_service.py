@@ -6,7 +6,16 @@ from pathlib import Path
 
 from PIL import Image, PngImagePlugin
 
-from png_prompt_collector.service import collect_positive_prompts, discover_png_paths, read_positive_prompt
+from png_prompt_collector.service import (
+    MAX_BATCH_RECORDS,
+    MAX_PROMPT_LENGTH,
+    build_prompt_batch,
+    collect_positive_prompts,
+    discover_png_paths,
+    export_prompt_batch,
+    import_prompt_batch,
+    read_positive_prompt,
+)
 
 
 def write_test_png(path: Path, parameters: str | None = None) -> None:
@@ -41,13 +50,11 @@ class PngServiceTests(unittest.TestCase):
                 [str(first)],
                 str(root),
                 recursive=True,
-                deduplicate=True,
-                ignore_case=True,
             )
 
             self.assertEqual(result.selected_count, 2)
             self.assertEqual(result.imported_count, 2)
-            self.assertEqual(result.collection.tags, ("cat", "blue eyes", "smile"))
+            self.assertEqual([prompt for _, prompt in result.records], ["cat, blue eyes", "cat, smile"])
 
     def test_reports_png_without_prompt(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -71,7 +78,34 @@ class PngServiceTests(unittest.TestCase):
             self.assertEqual([path.name for path in paths], ["image.png"])
             self.assertEqual(errors, ())
 
+    def test_records_preserve_each_image_and_batch_schema(self):
+        with tempfile.TemporaryDirectory() as directory:
+            first = Path(directory) / "one.png"
+            second = Path(directory) / "two.png"
+            write_test_png(first, "cat")
+            write_test_png(second, "dog")
+            result = collect_positive_prompts([str(first), str(second)])
+            batch = build_prompt_batch(result.records)
+            self.assertEqual([r["prompt"]["positive"] for r in batch["records"]], ["cat", "dog"])
+            self.assertEqual(import_prompt_batch(batch), batch)
+
+    def test_batch_limits_are_enforced_without_silent_truncation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            image = Path(directory) / "one.png"
+            write_test_png(image, "cat")
+            with self.assertRaisesRegex(ValueError, "最多"):
+                build_prompt_batch([(image, f"prompt {index}") for index in range(MAX_BATCH_RECORDS + 1)], deduplicate=False)
+            with self.assertRaisesRegex(ValueError, "超过"):
+                build_prompt_batch([(image, "x" * (MAX_PROMPT_LENGTH + 1))])
+
+    def test_export_can_be_imported_again(self):
+        with tempfile.TemporaryDirectory() as directory:
+            image = Path(directory) / "one.png"
+            write_test_png(image, "cat")
+            batch = build_prompt_batch([(image, "cat")])
+            exported = export_prompt_batch(batch)
+            self.assertEqual(import_prompt_batch(exported), batch)
+
 
 if __name__ == "__main__":
     unittest.main()
-

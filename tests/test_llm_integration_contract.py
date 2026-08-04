@@ -1,47 +1,28 @@
-from __future__ import annotations
-
-import re
-import unittest
 from pathlib import Path
+import unittest
 
+ROOT = Path(__file__).resolve().parents[1]
+EXTENSIONS = ROOT.parent
 
-EXTENSION_ROOT = Path(__file__).resolve().parents[1]
-LLM_STUDIO_UI = EXTENSION_ROOT.parent / "sd-webui-llm-prompt-studio" / "scripts" / "prompt_studio_ui.py"
-BRIDGE_JS = EXTENSION_ROOT / "javascript" / "png_prompt_collector.js"
-COLLECTOR_UI = EXTENSION_ROOT / "png_prompt_collector" / "ui.py"
+class IntegrationContractTests(unittest.TestCase):
+    def test_batch_targets_and_payload_are_exposed(self):
+        ui = (ROOT / "png_prompt_collector" / "ui.py").read_text(encoding="utf-8")
+        js = (ROOT / "javascript" / "png_prompt_collector.js").read_text(encoding="utf-8")
+        self.assertIn('elem_id="ppc_prompt_records"', ui)
+        self.assertIn('elem_id="ppc_prompt_batch_payload"', ui)
+        self.assertIn("sendBatchToLlm", ui)
+        self.assertIn("sendBatchToRanbooru", ui)
+        self.assertIn("llm_prompt_studio_png_batch_payload", js)
+        self.assertIn("ranbooru_prompt_batch_payload", js)
 
-
-class LlmIntegrationContractTests(unittest.TestCase):
-    def test_bridge_target_matches_visible_llm_studio_source_field(self):
-        bridge = BRIDGE_JS.read_text(encoding="utf-8")
-        llm_ui = LLM_STUDIO_UI.read_text(encoding="utf-8")
-        match = re.search(r'const TARGET_ID = "([^"]+)";', bridge)
-
-        self.assertIsNotNone(match)
-        self.assertIn(f'elem_id="{match.group(1)}"', llm_ui)
-        self.assertIn("PNG Tag 汇总可导入", llm_ui)
-
-    def test_collector_exposes_visible_send_action(self):
-        collector_ui = COLLECTOR_UI.read_text(encoding="utf-8")
-
-        self.assertIn("LLM Prompt Studio 联动", collector_ui)
-        self.assertIn("发送并打开 LLM Prompt Studio", collector_ui)
-        self.assertIn("window.pngPromptCollector.sendToLlmPromptStudio", collector_ui)
-
-    def test_collector_exposes_workflow_sections_and_status_targets(self):
-        collector_ui = COLLECTOR_UI.read_text(encoding="utf-8")
-        css = (EXTENSION_ROOT / "style.css").read_text(encoding="utf-8")
-
-        for elem_id in (
-            "ppc_collection_workspace",
-            "ppc_collection_status",
-            "ppc_llm_handoff",
-            "ppc_export_result",
-        ):
-            self.assertIn(f'elem_id="{elem_id}"', collector_ui)
-        self.assertIn(".ppc-workflow-section", css)
-        self.assertIn("@media (max-width: 900px)", css)
-
+    def test_receivers_expose_the_same_versioned_json_contract(self):
+        llm = (EXTENSIONS / "sd-webui-llm-prompt-studio" / "scripts" / "prompt_studio_ui.py").read_text(encoding="utf-8")
+        ranbooru_ui = (EXTENSIONS / "sd-webui-ranbooru-reforge" / "scripts" / "ranbooru.py").read_text(encoding="utf-8")
+        ranbooru_db = (EXTENSIONS / "sd-webui-ranbooru-reforge" / "scripts" / "cache_db.py").read_text(encoding="utf-8")
+        self.assertIn('PNG_BATCH_SCHEMA = "prompt_batch.v1"', llm)
+        self.assertIn('elem_id="llm_prompt_studio_png_batch_payload"', llm)
+        self.assertIn('elem_id="ranbooru_prompt_batch_payload"', ranbooru_ui)
+        self.assertIn('PROMPT_BATCH_SCHEMA = "prompt_batch.v1"', ranbooru_db)
 
 if __name__ == "__main__":
     unittest.main()

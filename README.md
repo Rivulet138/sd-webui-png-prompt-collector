@@ -1,38 +1,33 @@
 # PNG Positive Prompt Collector
 
-Forge Neo / AUTOMATIC1111 extension for collecting positive prompt tags from previously generated PNG images.
+Forge Neo / AUTOMATIC1111 扩展，用于从历史 PNG 原图中逐张读取完整正向 Prompt。
 
-## Features
+## 功能
 
-- Imports multiple PNG files or scans a local directory.
-- Reads Forge/A1111 generation metadata and keeps only the positive prompt.
-- Uses Forge's active PNG reader, so installed metadata adapters such as ComfyUI PNG Info are supported automatically.
-- Splits comma-separated tags without breaking nested prompt syntax such as weighted groups or LoRA tags.
-- Deduplicates tags in first-seen order, with optional case-sensitive matching.
-- Shows occurrence and source-image counts.
-- Sends the collected tags to LLM Prompt Studio in overwrite or append mode.
-- Exports the collected positive tags as a UTF-8 TXT file.
+- 导入多张 PNG，或扫描本机目录及子目录。
+- 读取 Forge/A1111 生成元数据，只保留每张图片的完整正向 Prompt。
+- 一张图片对应一条记录，不拆分、不汇总、不同图片之间不合并 Prompt。
+- 可按图片内容 SHA-256 去除重复图片。
+- 导入和导出统一的 `prompt_batch.v1` JSON。
+- 将逐图批次发送到 LLM 工作室进行批量润色/扩写，或发送到 Ranbooru 缓存。
+- LLM 结果可按顺序逐条追加到 txt2img 或 img2img 正向 Prompt。
 
-Negative prompts and generation parameters are never included in the collected output.
+负面 Prompt 和生成参数不会进入导出结果。
 
-## Usage
+## 使用
 
-1. Restart Forge Neo after placing this folder under `extensions`.
-2. Open the **PNG Tag 汇总** tab.
-3. Upload PNG originals, or select a local directory.
-4. Click **读取并汇总**.
-5. Download the generated TXT file, or use **发送并打开 LLM Prompt Studio**.
+1. 重启 Forge Neo，打开 **PNG Prompt Collector**。
+2. 上传 PNG 原图、填写本机目录，或导入 `prompt_batch.v1` JSON。
+3. 点击 **读取逐图 Prompt**。
+4. 检查逐图表格后导出 JSON，或发送到 LLM 工作室 / Ranbooru。
 
-## LLM Prompt Studio integration
+## LLM 工作室联动
 
-When `sd-webui-llm-prompt-studio` is enabled, the collector can write its result
-to the studio's visible source-tag field and open the **生成** tab. The
-transfer supports replacing the current source tags or appending to them. It
-does not call the configured LLM automatically.
+启用 `sd-webui-llm-prompt-studio` 后，Collector 会把最多 200 条逐图记录发送到
+**批处理 > PNG 润色 / 扩写**。LLM 工作室保持输入顺序和一图一条关系，批处理完成后可用
+**追加并下一条** 依次写入原生 txt2img / img2img 正向 Prompt。
 
-## Development
-
-Run tests from this extension directory with Forge Neo's Python environment:
+## 开发
 
 ```powershell
 E:\sd-webui-forge-neo\venv\Scripts\python.exe -m unittest discover -s tests -v
