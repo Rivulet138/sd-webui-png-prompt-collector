@@ -88,6 +88,39 @@ class PngServiceTests(unittest.TestCase):
             self.assertEqual([r["prompt"]["positive"] for r in batch["records"]], ["cat", "dog"])
             self.assertEqual(import_prompt_batch(batch), batch)
 
+    def test_record_ids_are_stable_and_import_preserves_processing_fields(self):
+        with tempfile.TemporaryDirectory() as directory:
+            image = Path(directory) / "one.png"
+            write_test_png(image, "cat")
+            first = build_prompt_batch([(image, "cat")])
+            second = build_prompt_batch([(image, "cat")])
+
+            self.assertEqual(first["records"][0]["record_id"], second["records"][0]["record_id"])
+            record = first["records"][0]
+            record["prompt"].update({"natural": "A cat.", "processed": "A detailed cat."})
+            record.update({"status": "completed", "error": "", "appended": True, "booru": {"site": "danbooru"}})
+            record["image"]["source_url"] = "https://example.invalid/post/1"
+
+            imported = import_prompt_batch(first)["records"][0]
+            self.assertEqual(imported["prompt"]["processed"], "A detailed cat.")
+            self.assertEqual(imported["status"], "completed")
+            self.assertTrue(imported["appended"])
+            self.assertEqual(imported["booru"]["site"], "danbooru")
+            self.assertEqual(imported["image"]["source_url"], "https://example.invalid/post/1")
+
+    def test_import_rejects_duplicate_ids_and_malformed_sha256(self):
+        base = {"image": {"filename": "one.png", "sha256": "a" * 64}, "prompt": {"positive": "cat"}}
+        with self.assertRaisesRegex(ValueError, "record_id 重复"):
+            import_prompt_batch({
+                "schema_version": "prompt_batch.v1",
+                "records": [{**base, "record_id": "same"}, {**base, "record_id": "same"}],
+            })
+        with self.assertRaisesRegex(ValueError, "sha256"):
+            import_prompt_batch({
+                "schema_version": "prompt_batch.v1",
+                "records": [{"image": {"filename": "one.png", "sha256": "bad"}, "prompt": {"positive": "cat"}}],
+            })
+
     def test_batch_record_count_is_unbounded_but_prompt_length_is_validated(self):
         with tempfile.TemporaryDirectory() as directory:
             image = Path(directory) / "one.png"

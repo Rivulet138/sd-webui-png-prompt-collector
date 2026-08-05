@@ -30,6 +30,7 @@ MAX_PROMPT_LENGTH = 12_000
 def build_prompt_batch(records: Iterable[tuple[Path, str]], deduplicate: bool = True) -> dict[str, Any]:
     output: list[dict[str, Any]] = []
     seen: set[str] = set()
+    digest_occurrences: dict[str, int] = {}
     digest_cache: dict[Path, str] = {}
     for index, (path, prompt) in enumerate(records, 1):
         image_path = Path(path)
@@ -43,11 +44,12 @@ def build_prompt_batch(records: Iterable[tuple[Path, str]], deduplicate: bool = 
         if not positive:
             continue
         seen.add(digest)
+        digest_occurrences[digest] = digest_occurrences.get(digest, 0) + 1
         if len(positive) > MAX_PROMPT_LENGTH:
             raise ValueError(f"{image_path.name} 的 Prompt 超过 {MAX_PROMPT_LENGTH} 字符")
         output.append(
             {
-                "record_id": f"png-{len(output) + 1:04d}",
+                "record_id": f"png-{digest}-{digest_occurrences[digest]}",
                 "index": index,
                 "image": {"filename": image_path.name, "sha256": digest},
                 "prompt": {"positive": positive},
@@ -79,6 +81,9 @@ def import_prompt_batch(value: str | Path | dict[str, Any]) -> dict[str, Any]:
     if not isinstance(records, list):
         raise ValueError("records 必须是数组")
     normalized: list[dict[str, Any]] = []
+    producer = payload.get("producer") if isinstance(payload.get("producer"), dict) else {}
+    producer_name = str(producer.get("name") or PRODUCER_NAME)
+    record_ids: set[str] = set()
     for index, record in enumerate(records, 1):
         if not isinstance(record, dict):
             raise ValueError(f"第 {index} 条记录不是对象")
@@ -92,31 +97,48 @@ def import_prompt_batch(value: str | Path | dict[str, Any]) -> dict[str, Any]:
         if len(positive) > MAX_PROMPT_LENGTH:
             raise ValueError(f"第 {index} 条 Prompt 超过 {MAX_PROMPT_LENGTH} 字符")
         filename = Path(str(image.get("filename") or f"record-{index}.png")).name
-        record_id = str(record.get("record_id") or f"record-{index:04d}")
+        record_id = str(record.get("record_id") or "").strip()
         sha256 = str(image.get("sha256") or "")
         if len(filename) > 255 or len(record_id) > 256 or len(sha256) > 128:
             raise ValueError(f"第 {index} 条图片标识过长")
+        if sha256 and (len(sha256) != 64 or any(char not in "0123456789abcdefABCDEF" for char in sha256)):
+            raise ValueError(f"第 {index} 条 sha256 必须是 64 位十六进制")
+        if not record_id:
+            identity = f"{producer_name}\x1f{sha256}\x1f{filename}\x1f{positive}"
+            record_id = f"generated-{hashlib.sha256(identity.encode('utf-8')).hexdigest()}"
+        if record_id in record_ids:
+            raise ValueError(f"第 {index} 条 record_id 重复: {record_id}")
+        record_ids.add(record_id)
         normalized_prompt = {"positive": positive}
+        natural = str(prompt.get("natural") or "").strip()
+        if natural:
+            if len(natural) > MAX_PROMPT_LENGTH:
+                raise ValueError(f"第 {index} 条自然语言 Prompt 超过 {MAX_PROMPT_LENGTH} 字符")
+            normalized_prompt["natural"] = natural
         processed = str(prompt.get("processed") or "").strip()
         if processed:
             if len(processed) > MAX_PROMPT_LENGTH:
                 raise ValueError(f"第 {index} 条处理结果超过 {MAX_PROMPT_LENGTH} 字符")
             normalized_prompt["processed"] = processed
-        normalized.append(
-            {
-                "record_id": record_id,
-                "index": index,
-                "image": {
-                    "filename": filename,
-                    "sha256": sha256,
-                },
-                "prompt": normalized_prompt,
-            }
-        )
-    producer = payload.get("producer") if isinstance(payload.get("producer"), dict) else {}
+        normalized_image = {"filename": filename, "sha256": sha256}
+        for field in ("source_url", "preview_url"):
+            if image.get(field):
+                normalized_image[field] = str(image[field])
+        normalized_record = {
+            "record_id": record_id,
+            "index": index,
+            "image": normalized_image,
+            "prompt": normalized_prompt,
+        }
+        for field in ("status", "error", "booru"):
+            if field in record:
+                normalized_record[field] = record[field]
+        if record.get("appended") is True:
+            normalized_record["appended"] = True
+        normalized.append(normalized_record)
     return {
         "schema_version": SCHEMA_VERSION,
-        "producer": {"name": str(producer.get("name") or PRODUCER_NAME)},
+        "producer": {"name": producer_name},
         "records": normalized,
     }
 

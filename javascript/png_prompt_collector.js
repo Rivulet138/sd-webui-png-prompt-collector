@@ -45,7 +45,10 @@
         if (!target) return status("error", `未找到 ${label}`, "请确认接收扩展已启用并重新加载 Forge。" );
         const input = target.matches("textarea, input") ? target : target.querySelector("textarea, input");
         if (!input) return status("error", `${label} 接收控件不可用`, "接收扩展没有暴露兼容的 JSON 字段。" );
-        const value = JSON.stringify({ schema_version: "prompt_batch.v1", producer: { name: "sd-webui-png-prompt-collector" }, records });
+        const producer = batch?.producer && typeof batch.producer === "object"
+            ? batch.producer
+            : { name: "sd-webui-png-prompt-collector" };
+        const value = JSON.stringify({ schema_version: "prompt_batch.v1", producer, records });
         setInputValue(input, value);
         if (targetId === "llm_prompt_studio_png_batch_payload") openPngBatchStudio();
         if (targetId === "ranbooru_prompt_batch_payload") {

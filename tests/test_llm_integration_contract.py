@@ -15,6 +15,7 @@ class IntegrationContractTests(unittest.TestCase):
         self.assertIn("llm_prompt_studio_png_batch_payload", js)
         self.assertIn("ranbooru_prompt_batch_payload", js)
         self.assertIn("Array.isArray(batch?.records) ? batch.records : []", js)
+        self.assertIn("const producer = batch?.producer", js)
         self.assertNotIn("slice(0, 200)", js)
 
     def test_receivers_expose_the_same_versioned_json_contract(self):
