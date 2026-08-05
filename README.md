@@ -8,6 +8,7 @@ Forge Neo / AUTOMATIC1111 扩展，用于从历史 PNG 原图中逐张读取完�
 - 读取 Forge/A1111 生成元数据，只保留每张图片的完整正向 Prompt。
 - 一张图片对应一条记录，不拆分、不汇总、不同图片之间不合并 Prompt。
 - 可按图片内容 SHA-256 去除重复图片。
+- 每张已选择图片都会报告进度；可在元数据读取或 SHA-256 去重阶段取消长批次，两个阶段都会保留已经完成的记录，并准确报告尚未处理的图片数。
 - 导入和导出统一的 `prompt_batch.v1` JSON。
 - 将逐图批次发送到 LLM 工作室进行批量润色/扩写，或发送到 Ranbooru 缓存。
 - LLM 结果可按顺序逐条追加到 txt2img 或 img2img 正向 Prompt。
@@ -23,9 +24,11 @@ Forge Neo / AUTOMATIC1111 扩展，用于从历史 PNG 原图中逐张读取完�
 
 ## LLM 工作室联动
 
-启用 `sd-webui-llm-prompt-studio` 后，Collector 会把全部逐图记录发送到，不设置批次数量上限。
-**批处理 > PNG 润色 / 扩写**。LLM 工作室保持输入顺序和一图一条关系，批处理完成后可用
+启用 `sd-webui-llm-prompt-studio` 后，Collector 会把全部逐图记录发送到
+**批处理 > PNG 润色 / 扩写**，Prompt Batch 不设置记录数量上限。LLM 工作室保持输入顺序和一图一条关系，批处理完成后可用
 **追加并下一条** 依次写入原生 txt2img / img2img 正向 Prompt。
+
+三个扩展仍是独立插件。未安装 LLM 工作室或 Ranbooru 时，Collector 的 PNG 读取、去重、JSON 导入导出和界面仍可独立使用；联动按钮会报告目标扩展不可用。
 
 ## 开发
 

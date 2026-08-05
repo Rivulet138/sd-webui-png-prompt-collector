@@ -4,6 +4,7 @@ import os
 import tempfile
 import hashlib
 import json
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
@@ -20,6 +21,15 @@ class ImportResult:
     skipped_count: int
     errors: tuple[str, ...]
     records: tuple[tuple[Path, str], ...] = ()
+    processed_count: int = 0
+    cancelled_count: int = 0
+
+
+@dataclass(frozen=True)
+class BatchBuildResult:
+    batch: dict[str, Any]
+    processed_count: int
+    cancelled_count: int
 
 
 SCHEMA_VERSION = "prompt_batch.v1"
@@ -28,20 +38,34 @@ MAX_PROMPT_LENGTH = 12_000
 
 
 def build_prompt_batch(records: Iterable[tuple[Path, str]], deduplicate: bool = True) -> dict[str, Any]:
+    return build_prompt_batch_with_stats(records, deduplicate).batch
+
+
+def build_prompt_batch_with_stats(
+    records: Iterable[tuple[Path, str]],
+    deduplicate: bool = True,
+    is_cancelled: Callable[[], bool] | None = None,
+) -> BatchBuildResult:
+    source_records = list(records)
     output: list[dict[str, Any]] = []
     seen: set[str] = set()
     digest_occurrences: dict[str, int] = {}
     digest_cache: dict[Path, str] = {}
-    for index, (path, prompt) in enumerate(records, 1):
+    processed = 0
+    for path, prompt in source_records:
+        if is_cancelled is not None and is_cancelled():
+            break
         image_path = Path(path)
         digest = digest_cache.get(image_path)
         if digest is None:
             digest = _sha256_file(image_path)
             digest_cache[image_path] = digest
         if deduplicate and digest in seen:
+            processed += 1
             continue
         positive = str(prompt).strip()
         if not positive:
+            processed += 1
             continue
         seen.add(digest)
         digest_occurrences[digest] = digest_occurrences.get(digest, 0) + 1
@@ -50,12 +74,14 @@ def build_prompt_batch(records: Iterable[tuple[Path, str]], deduplicate: bool = 
         output.append(
             {
                 "record_id": f"png-{digest}-{digest_occurrences[digest]}",
-                "index": index,
+                "index": len(output) + 1,
                 "image": {"filename": image_path.name, "sha256": digest},
                 "prompt": {"positive": positive},
             }
         )
-    return {"schema_version": SCHEMA_VERSION, "producer": {"name": PRODUCER_NAME}, "records": output}
+        processed += 1
+    batch = {"schema_version": SCHEMA_VERSION, "producer": {"name": PRODUCER_NAME}, "records": output}
+    return BatchBuildResult(batch, processed, len(source_records) - processed)
 
 
 def export_prompt_batch(batch: dict[str, Any]) -> str:
@@ -120,6 +146,9 @@ def import_prompt_batch(value: str | Path | dict[str, Any]) -> dict[str, Any]:
             if len(processed) > MAX_PROMPT_LENGTH:
                 raise ValueError(f"第 {index} 条处理结果超过 {MAX_PROMPT_LENGTH} 字符")
             normalized_prompt["processed"] = processed
+        for field in ("processed_kind", "output_kind"):
+            if field in prompt and prompt[field] is not None:
+                normalized_prompt[field] = str(prompt[field]).strip()
         normalized_image = {"filename": filename, "sha256": sha256}
         for field in ("source_url", "preview_url"):
             if image.get(field):
@@ -130,6 +159,11 @@ def import_prompt_batch(value: str | Path | dict[str, Any]) -> dict[str, Any]:
             "image": normalized_image,
             "prompt": normalized_prompt,
         }
+        source_identity = str(record.get("source_identity") or "").strip()
+        if source_identity:
+            if len(source_identity) > 512:
+                raise ValueError(f"第 {index} 条 source_identity 过长")
+            normalized_record["source_identity"] = source_identity
         for field in ("status", "error", "booru"):
             if field in record:
                 normalized_record[field] = record[field]
@@ -147,28 +181,40 @@ def collect_positive_prompts(
     uploaded_files: Any = None,
     directory: str | None = None,
     recursive: bool = False,
+    progress: Callable[[int, int, Path], None] | None = None,
+    is_cancelled: Callable[[], bool] | None = None,
 ) -> ImportResult:
     paths, discovery_errors = discover_png_paths(uploaded_files, directory, recursive)
     entries: list[tuple[str, str]] = []
     errors = list(discovery_errors)
 
-    for path in paths:
+    total = len(paths)
+    processed = 0
+    for completed, path in enumerate(paths, 1):
+        if is_cancelled is not None and is_cancelled():
+            break
         try:
             prompt = read_positive_prompt(path)
         except Exception as exc:
             errors.append(f"{path.name}: {exc}")
-            continue
-        if not prompt:
-            errors.append(f"{path.name}: 未找到可读取的正向提示词")
-            continue
-        entries.append((str(path), prompt))
+        else:
+            if not prompt:
+                errors.append(f"{path.name}: 未找到可读取的正向提示词")
+            else:
+                entries.append((str(path), prompt))
+        finally:
+            processed = completed
+            if progress is not None:
+                progress(completed, total, path)
 
     return ImportResult(
         selected_count=len(paths),
         imported_count=len(entries),
-        skipped_count=len(paths) - len(entries),
+        skipped_count=processed - len(entries),
         errors=tuple(errors),
         records=tuple((Path(source), prompt) for source, prompt in entries),
+        processed_count=processed,
+        cancelled_count=len(paths) - processed,
     )
 
 
@@ -223,11 +269,13 @@ def read_positive_prompt(path: str | Path) -> str:
 def _read_webui_infotext(image: Image.Image) -> str | None:
     try:
         from modules import images
-
-        infotext, _ = images.read_info_from_image(image)
-        return str(infotext) if infotext else None
-    except Exception:
+    except ModuleNotFoundError as exc:
+        if exc.name != "modules":
+            raise
         return None
+
+    infotext, _ = images.read_info_from_image(image)
+    return str(infotext) if infotext else None
 
 
 def _read_raw_infotext(image: Image.Image) -> str | None:
@@ -252,11 +300,14 @@ def _convert_comfy_metadata(info: dict[str, Any], image: Image.Image) -> str | N
         return None
     try:
         from comfyui_pnginfo.parser import convert_info_to_infotext
-
-        converted = convert_info_to_infotext(info, image_size=(image.width, image.height))
-        return converted.infotext if converted else None
-    except Exception:
+    except ModuleNotFoundError as exc:
+        if exc.name not in {"comfyui_pnginfo", "comfyui_pnginfo.parser"}:
+            raise
         return None
+
+
+    converted = convert_info_to_infotext(info, image_size=(image.width, image.height))
+    return converted.infotext if converted else None
 
 
 def _as_file_values(value: Any) -> list[Any]:
