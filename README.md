@@ -23,7 +23,7 @@ Forge Neo / AUTOMATIC1111 扩展，用于从历史 PNG 原图中逐张读取完�
 
 ## LLM 工作室联动
 
-启用 `sd-webui-llm-prompt-studio` 后，Collector 会把最多 200 条逐图记录发送到
+启用 `sd-webui-llm-prompt-studio` 后，Collector 会把全部逐图记录发送到，不设置批次数量上限。
 **批处理 > PNG 润色 / 扩写**。LLM 工作室保持输入顺序和一图一条关系，批处理完成后可用
 **追加并下一条** 依次写入原生 txt2img / img2img 正向 Prompt。
 

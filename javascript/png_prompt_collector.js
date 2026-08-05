@@ -39,7 +39,7 @@
             try { batch = JSON.parse(batch); }
             catch (_error) { return status("error", "JSON 批次无效", "无法解析当前批次。" ); }
         }
-        const records = Array.isArray(batch?.records) ? batch.records.slice(0, 200) : [];
+        const records = Array.isArray(batch?.records) ? batch.records : [];
         if (!records.length) return status("warning", "没有可发送的逐图 Prompt", "请先导入 PNG 或 JSON 批次。" );
         const target = appRoot().querySelector(`#${targetId}`);
         if (!target) return status("error", `未找到 ${label}`, "请确认接收扩展已启用并重新加载 Forge。" );

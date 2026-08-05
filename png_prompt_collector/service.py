@@ -13,9 +13,6 @@ from PIL import Image
 from .core import extract_positive_prompt
 
 
-MAX_IMAGE_FILES = 10_000
-
-
 @dataclass(frozen=True)
 class ImportResult:
     selected_count: int
@@ -27,19 +24,19 @@ class ImportResult:
 
 SCHEMA_VERSION = "prompt_batch.v1"
 PRODUCER_NAME = "sd-webui-png-prompt-collector"
-MAX_BATCH_RECORDS = 200
 MAX_PROMPT_LENGTH = 12_000
-MAX_TOTAL_PROMPT_LENGTH = 1_000_000
-MAX_BATCH_BYTES = 4 * 1024 * 1024
 
 
 def build_prompt_batch(records: Iterable[tuple[Path, str]], deduplicate: bool = True) -> dict[str, Any]:
     output: list[dict[str, Any]] = []
     seen: set[str] = set()
-    total_length = 0
+    digest_cache: dict[Path, str] = {}
     for index, (path, prompt) in enumerate(records, 1):
         image_path = Path(path)
-        digest = _sha256_file(image_path)
+        digest = digest_cache.get(image_path)
+        if digest is None:
+            digest = _sha256_file(image_path)
+            digest_cache[image_path] = digest
         if deduplicate and digest in seen:
             continue
         positive = str(prompt).strip()
@@ -48,11 +45,6 @@ def build_prompt_batch(records: Iterable[tuple[Path, str]], deduplicate: bool = 
         seen.add(digest)
         if len(positive) > MAX_PROMPT_LENGTH:
             raise ValueError(f"{image_path.name} 的 Prompt 超过 {MAX_PROMPT_LENGTH} 字符")
-        total_length += len(positive)
-        if total_length > MAX_TOTAL_PROMPT_LENGTH:
-            raise ValueError("批次 Prompt 总长度超过限制")
-        if len(output) >= MAX_BATCH_RECORDS:
-            raise ValueError(f"单批最多 {MAX_BATCH_RECORDS} 张图片")
         output.append(
             {
                 "record_id": f"png-{len(output) + 1:04d}",
@@ -67,8 +59,6 @@ def build_prompt_batch(records: Iterable[tuple[Path, str]], deduplicate: bool = 
 def export_prompt_batch(batch: dict[str, Any]) -> str:
     batch = import_prompt_batch(batch)
     content = json.dumps(batch, ensure_ascii=False, indent=2) + "\n"
-    if len(content.encode("utf-8")) > MAX_BATCH_BYTES:
-        raise ValueError("批次 JSON 超过 4 MB")
     handle, filename = tempfile.mkstemp(prefix="prompt_batch_", suffix=".json")
     os.close(handle)
     Path(filename).write_text(content, encoding="utf-8")
@@ -80,23 +70,15 @@ def import_prompt_batch(value: str | Path | dict[str, Any]) -> dict[str, Any]:
         payload = value
     else:
         path = Path(value)
-        if path.stat().st_size > MAX_BATCH_BYTES:
-            raise ValueError("批次 JSON 超过 4 MB")
         payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
         raise ValueError("JSON 顶层必须是对象")
-    if len(json.dumps(payload, ensure_ascii=False).encode("utf-8")) > MAX_BATCH_BYTES:
-        raise ValueError("批次 JSON 超过 4 MB")
     if not isinstance(payload, dict) or payload.get("schema_version") != SCHEMA_VERSION:
         raise ValueError("仅支持 prompt_batch.v1 JSON")
     records = payload.get("records")
     if not isinstance(records, list):
         raise ValueError("records 必须是数组")
-    if len(records) > MAX_BATCH_RECORDS:
-        raise ValueError(f"单批最多 {MAX_BATCH_RECORDS} 条记录")
-
     normalized: list[dict[str, Any]] = []
-    total_length = 0
     for index, record in enumerate(records, 1):
         if not isinstance(record, dict):
             raise ValueError(f"第 {index} 条记录不是对象")
@@ -109,9 +91,6 @@ def import_prompt_batch(value: str | Path | dict[str, Any]) -> dict[str, Any]:
             raise ValueError(f"第 {index} 条记录缺少正向 Prompt")
         if len(positive) > MAX_PROMPT_LENGTH:
             raise ValueError(f"第 {index} 条 Prompt 超过 {MAX_PROMPT_LENGTH} 字符")
-        total_length += len(positive)
-        if total_length > MAX_TOTAL_PROMPT_LENGTH:
-            raise ValueError("批次 Prompt 总长度超过限制")
         filename = Path(str(image.get("filename") or f"record-{index}.png")).name
         record_id = str(record.get("record_id") or f"record-{index:04d}")
         sha256 = str(image.get("sha256") or "")
@@ -122,9 +101,6 @@ def import_prompt_batch(value: str | Path | dict[str, Any]) -> dict[str, Any]:
         if processed:
             if len(processed) > MAX_PROMPT_LENGTH:
                 raise ValueError(f"第 {index} 条处理结果超过 {MAX_PROMPT_LENGTH} 字符")
-            total_length += len(processed)
-            if total_length > MAX_TOTAL_PROMPT_LENGTH:
-                raise ValueError("批次 Prompt 总长度超过限制")
             normalized_prompt["processed"] = processed
         normalized.append(
             {
@@ -208,10 +184,6 @@ def discover_png_paths(
             continue
         seen.add(key)
         unique.append(path)
-        if len(unique) == MAX_IMAGE_FILES:
-            errors.append(f"文件数量超过上限，仅处理前 {MAX_IMAGE_FILES} 张 PNG")
-            break
-
     return unique, tuple(errors)
 
 

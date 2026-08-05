@@ -14,6 +14,8 @@ class IntegrationContractTests(unittest.TestCase):
         self.assertIn("sendBatchToRanbooru", ui)
         self.assertIn("llm_prompt_studio_png_batch_payload", js)
         self.assertIn("ranbooru_prompt_batch_payload", js)
+        self.assertIn("Array.isArray(batch?.records) ? batch.records : []", js)
+        self.assertNotIn("slice(0, 200)", js)
 
     def test_receivers_expose_the_same_versioned_json_contract(self):
         llm = (EXTENSIONS / "sd-webui-llm-prompt-studio" / "scripts" / "prompt_studio_ui.py").read_text(encoding="utf-8")

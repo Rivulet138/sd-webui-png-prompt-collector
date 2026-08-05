@@ -7,7 +7,6 @@ from pathlib import Path
 from PIL import Image, PngImagePlugin
 
 from png_prompt_collector.service import (
-    MAX_BATCH_RECORDS,
     MAX_PROMPT_LENGTH,
     build_prompt_batch,
     collect_positive_prompts,
@@ -89,12 +88,29 @@ class PngServiceTests(unittest.TestCase):
             self.assertEqual([r["prompt"]["positive"] for r in batch["records"]], ["cat", "dog"])
             self.assertEqual(import_prompt_batch(batch), batch)
 
-    def test_batch_limits_are_enforced_without_silent_truncation(self):
+    def test_batch_record_count_is_unbounded_but_prompt_length_is_validated(self):
         with tempfile.TemporaryDirectory() as directory:
             image = Path(directory) / "one.png"
             write_test_png(image, "cat")
-            with self.assertRaisesRegex(ValueError, "最多"):
-                build_prompt_batch([(image, f"prompt {index}") for index in range(MAX_BATCH_RECORDS + 1)], deduplicate=False)
+            payload = {
+                "schema_version": "prompt_batch.v1",
+                "records": [
+                    {"image": {"filename": f"{index}.png"}, "prompt": {"positive": f"prompt {index} " + "x" * 1024}}
+                    for index in range(5001)
+                ],
+            }
+            self.assertEqual(len(import_prompt_batch(payload)["records"]), 5001)
+            batch = build_prompt_batch(
+                [(image, f"prompt {index} " + "x" * 1024) for index in range(5001)],
+                deduplicate=False,
+            )
+            self.assertEqual(len(batch["records"]), 5001)
+            exported = Path(export_prompt_batch(payload))
+            try:
+                self.assertGreater(exported.stat().st_size, 4 * 1024 * 1024)
+                self.assertEqual(len(import_prompt_batch(exported)["records"]), 5001)
+            finally:
+                exported.unlink(missing_ok=True)
             with self.assertRaisesRegex(ValueError, "超过"):
                 build_prompt_batch([(image, "x" * (MAX_PROMPT_LENGTH + 1))])
 
