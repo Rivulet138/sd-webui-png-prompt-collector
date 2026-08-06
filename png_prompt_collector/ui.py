@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import html
 import threading
-import uuid
 from pathlib import Path
 
 import gradio as gr
@@ -11,8 +10,7 @@ from modules import shared
 from .service import build_prompt_batch_with_stats, collect_positive_prompts, export_prompt_batch, import_prompt_batch
 
 UI_CSS = (Path(__file__).parents[1] / "style.css").read_text(encoding="utf-8")
-_COLLECTION_TASKS: dict[str, threading.Event] = {}
-_COLLECTION_TASKS_LOCK = threading.Lock()
+_COLLECTION_CANCEL = threading.Event()
 
 def create_ui():
     with gr.Blocks(analytics_enabled=False, css=UI_CSS, elem_id="png_prompt_collector") as interface:
@@ -44,10 +42,9 @@ def create_ui():
         with gr.Accordion("未读取文件", open=False, elem_id="ppc_errors_section", elem_classes="ppc-workflow-section"):
             errors = gr.Textbox(show_label=False, lines=5, interactive=False, elem_id="ppc_errors")
         payload = gr.JSON(value={"schema_version": "prompt_batch.v1", "producer": {"name": "sd-webui-png-prompt-collector"}, "records": []}, elem_id="ppc_prompt_batch_payload", visible=False)
-        collection_task_id = gr.State(lambda: uuid.uuid4().hex)
         outputs = [status, records, payload, export, errors]
-        collect.click(_collect, [uploads, directory, recursive, deduplicate, collection_task_id], outputs)
-        cancel.click(_cancel, inputs=collection_task_id, outputs=status, queue=False)
+        collect.click(_collect, [uploads, directory, recursive, deduplicate], outputs)
+        cancel.click(_cancel, outputs=status, queue=False)
         import_button.click(_import, [json_import], outputs)
         send_llm.click(None, [payload], [llm_status], js="(batch) => window.pngPromptCollector.sendBatchToLlm(batch)")
         send_ranbooru.click(None, [payload], [llm_status], js="(batch) => window.pngPromptCollector.sendBatchToRanbooru(batch)")
@@ -57,13 +54,8 @@ def create_ui():
 def _rows(batch):
     return [[r["record_id"], r["index"], r["image"]["filename"], r["prompt"]["positive"]] for r in batch["records"]]
 
-def _collect(uploaded, directory, recursive, deduplicate, task_id="", progress=gr.Progress()):
-    task_id = str(task_id or "")
-    event = threading.Event()
-    with _COLLECTION_TASKS_LOCK:
-        if task_id in _COLLECTION_TASKS:
-            return _status("warning", "已有读取任务正在运行", "请等待完成或先取消当前任务"), gr.update(), gr.update(), gr.update(), gr.update()
-        _COLLECTION_TASKS[task_id] = event
+def _collect(uploaded, directory, recursive, deduplicate, progress=gr.Progress()):
+    _COLLECTION_CANCEL.clear()
     try:
         def report_progress(completed, total, path):
             progress((completed, total), desc=f"读取 {path.name}", unit="张")
@@ -73,18 +65,16 @@ def _collect(uploaded, directory, recursive, deduplicate, task_id="", progress=g
             directory,
             recursive,
             progress=report_progress,
-            is_cancelled=event.is_set,
+            is_cancelled=_COLLECTION_CANCEL.is_set,
         )
         try:
-            build_cancelled = None if result.cancelled_count else event.is_set
+            build_cancelled = None if result.cancelled_count else _COLLECTION_CANCEL.is_set
             build_result = build_prompt_batch_with_stats(result.records, deduplicate, build_cancelled)
             batch = build_result.batch
         except Exception as exc:
             return _status("error", "无法建立 JSON 批次", str(exc)), [], _empty_batch(), None, str(exc)
     finally:
-        with _COLLECTION_TASKS_LOCK:
-            if _COLLECTION_TASKS.get(task_id) is event:
-                _COLLECTION_TASKS.pop(task_id, None)
+        _COLLECTION_CANCEL.clear()
     error_text = "\n".join(result.errors)
     cancelled_count = result.cancelled_count + build_result.cancelled_count
     if not result.selected_count:
@@ -114,12 +104,8 @@ def _clear():
     return None, "", _status("idle", "等待导入", ""), [], _empty_batch(), None, "", _status("idle", "尚未发送批次", "")
 
 
-def _cancel(task_id=""):
-    with _COLLECTION_TASKS_LOCK:
-        event = _COLLECTION_TASKS.get(str(task_id or ""))
-        if event is None:
-            return _status("idle", "当前没有读取任务", "未发送取消请求")
-        event.set()
+def _cancel():
+    _COLLECTION_CANCEL.set()
     return _status("warning", "已请求取消读取", "当前图片处理完成后停止；已完成记录会保留")
 
 

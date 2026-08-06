@@ -56,10 +56,8 @@ class PngServiceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             image = Path(directory) / "completed.png"
             write_test_png(image, "completed prompt")
-            task_id = "cancel-during-read"
-
             def cancelled_collection(*_args, **_kwargs):
-                ui._COLLECTION_TASKS[task_id].set()
+                ui._COLLECTION_CANCEL.set()
                 return ImportResult(
                     selected_count=3,
                     imported_count=1,
@@ -72,7 +70,7 @@ class PngServiceTests(unittest.TestCase):
 
             with mock.patch.object(ui, "collect_positive_prompts", side_effect=cancelled_collection):
                 status, rows, batch, exported, errors = ui._collect(
-                    [str(image)], "", True, True, task_id, progress=lambda *_args, **_kwargs: None,
+                    [str(image)], "", True, True, progress=lambda *_args, **_kwargs: None,
                 )
 
             self.assertEqual(len(rows), 1)
