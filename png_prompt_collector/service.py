@@ -165,8 +165,27 @@ def import_prompt_batch(value: str | Path | dict[str, Any]) -> dict[str, Any]:
                 raise ValueError(f"第 {index} 条 source_identity 过长")
             normalized_record["source_identity"] = source_identity
         for field in ("status", "error", "booru"):
-            if field in record:
-                normalized_record[field] = record[field]
+            if field in record and record[field] is not None:
+                value = record[field]
+                if field == "booru" and isinstance(value, dict):
+                    if len(value) > 16 or any(not isinstance(key, str) for key in value):
+                        raise ValueError(f"第 {index} 条 booru 对象无效")
+                    safe_booru = {}
+                    for key, item in value.items():
+                        if not isinstance(item, (str, int, float, bool)):
+                            raise ValueError(f"第 {index} 条 booru 字段必须是标量")
+                        if isinstance(item, str) and len(item) > 256:
+                            raise ValueError(f"第 {index} 条 booru 字段过长")
+                        safe_booru[key[:64]] = item
+                    normalized_record[field] = safe_booru
+                    continue
+                if not isinstance(value, str):
+                    raise ValueError(f"第 {index} 条 {field} 必须是字符串")
+                value = value.strip()
+                if len(value) > 512:
+                    raise ValueError(f"第 {index} 条 {field} 过长")
+                if value:
+                    normalized_record[field] = value
         if record.get("appended") is True:
             normalized_record["appended"] = True
         normalized.append(normalized_record)

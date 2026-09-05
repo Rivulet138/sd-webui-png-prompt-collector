@@ -28,6 +28,13 @@
             panel?.scrollIntoView({ behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
         });
     }
+    function openInlineJsonPanel() {
+        const panel = appRoot().querySelector("#llm_prompt_studio_txt2img_json_batch");
+        if (!panel) return;
+        const toggle = panel.querySelector("button[aria-expanded], summary, .label-wrap");
+        if (toggle && toggle.getAttribute("aria-expanded") !== "true") toggle.click();
+        panel.scrollIntoView({ behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+    }
     function status(kind, headline, detail) {
         const escapeHtml = (value) => String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\"/g, "&quot;").replace(/'/g, "&#39;");
         const safeKind = ["idle", "success", "warning", "error"].includes(kind) ? kind : "idle";
@@ -41,7 +48,13 @@
         }
         const records = Array.isArray(batch?.records) ? batch.records : [];
         if (!records.length) return status("warning", "没有可发送的逐图 Prompt", "请先导入 PNG 或 JSON 批次。" );
-        const target = appRoot().querySelector(`#${targetId}`);
+        const targetSelector = targetId === "llm_prompt_studio_png_batch_payload"
+            ? "#llm_prompt_studio_txt2img_json_batch_payload"
+            : `#${targetId}`;
+        const resolvedTargetId = appRoot().querySelector(targetSelector)
+            ? targetSelector.slice(1)
+            : targetId;
+        const target = appRoot().querySelector(`#${resolvedTargetId}`);
         if (!target) return status("error", `未找到 ${label}`, "请确认接收扩展已启用并重新加载 Forge。" );
         const input = target.matches("textarea, input") ? target : target.querySelector("textarea, input");
         if (!input) return status("error", `${label} 接收控件不可用`, "接收扩展没有暴露兼容的 JSON 字段。" );
@@ -50,7 +63,8 @@
             : { name: "sd-webui-png-prompt-collector" };
         const value = JSON.stringify({ schema_version: "prompt_batch.v1", producer, records });
         setInputValue(input, value);
-        if (targetId === "llm_prompt_studio_png_batch_payload") openPngBatchStudio();
+        if (resolvedTargetId === "llm_prompt_studio_txt2img_json_batch_payload") openInlineJsonPanel();
+        else if (targetId === "llm_prompt_studio_png_batch_payload") openPngBatchStudio();
         if (targetId === "ranbooru_prompt_batch_payload") {
             const importButton = appRoot().querySelector("#ranbooru_prompt_batch_import_btn");
             if (!importButton) return status("error", "Ranbooru 导入按钮不可用", "批次尚未写入缓存。" );

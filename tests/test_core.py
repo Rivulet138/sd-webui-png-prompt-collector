@@ -20,6 +20,11 @@ class ExtractPositivePromptTests(unittest.TestCase):
 
         self.assertEqual(extract_positive_prompt(infotext), "a quiet street at night")
 
+    def test_removes_single_generation_parameter_line(self):
+        infotext = "a quiet street at night\nSteps: 20"
+
+        self.assertEqual(extract_positive_prompt(infotext), "a quiet street at night")
+
     def test_accepts_positive_prompt_prefix(self):
         self.assertEqual(extract_positive_prompt("Positive prompt: cat, window"), "cat, window")
 

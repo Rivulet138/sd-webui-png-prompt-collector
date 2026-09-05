@@ -279,6 +279,46 @@ class PngServiceTests(unittest.TestCase):
                 "records": [{"image": {"filename": "one.png", "sha256": "bad"}, "prompt": {"positive": "cat"}}],
             })
 
+    def test_import_rejects_non_string_record_status_fields(self):
+        for field in ("status", "error"):
+            with self.subTest(field=field):
+                payload = {
+                    "schema_version": "prompt_batch.v1",
+                    "records": [{
+                        "image": {"filename": "one.png"},
+                        "prompt": {"positive": "cat"},
+                        field: {"unexpected": "object"},
+                    }],
+                }
+                with self.assertRaisesRegex(ValueError, rf"{field} 必须是字符串"):
+                    import_prompt_batch(payload)
+
+    def test_import_rejects_overlong_record_status_fields(self):
+        for field in ("status", "error", "booru"):
+            with self.subTest(field=field):
+                payload = {
+                    "schema_version": "prompt_batch.v1",
+                    "records": [{
+                        "image": {"filename": "one.png"},
+                        "prompt": {"positive": "cat"},
+                        field: "x" * 513,
+                    }],
+                }
+                with self.assertRaisesRegex(ValueError, rf"{field} 过长"):
+                    import_prompt_batch(payload)
+
+    def test_import_rejects_complex_booru_objects(self):
+        payload = {
+            "schema_version": "prompt_batch.v1",
+            "records": [{
+                "image": {"filename": "one.png"},
+                "prompt": {"positive": "cat"},
+                "booru": {"site": {"nested": True}},
+            }],
+        }
+        with self.assertRaisesRegex(ValueError, "booru 字段必须是标量"):
+            import_prompt_batch(payload)
+
     def test_batch_record_count_is_unbounded_but_prompt_length_is_validated(self):
         with tempfile.TemporaryDirectory() as directory:
             image = Path(directory) / "one.png"

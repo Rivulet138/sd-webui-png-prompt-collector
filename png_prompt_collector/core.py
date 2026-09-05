@@ -29,4 +29,15 @@ def extract_positive_prompt(infotext: str | None) -> str:
 
 
 def _looks_like_parameter_line(line: str) -> bool:
-    return len(PARAMETER_RE.findall(line)) >= 2
+    matches = PARAMETER_RE.findall(line)
+    if len(matches) >= 2:
+        return True
+    # A1111/Forge may emit a single generation parameter (for example
+    # ``Steps: 20``). Only treat a one-field line as metadata when the whole
+    # line is a parameter pair; a prompt containing ``Seed:`` must remain.
+    return len(matches) == 1 and bool(re.fullmatch(
+        r"\s*(?:Steps|Sampler|Schedule type|CFG scale|Seed|Size|Model|"
+        r"Model hash|Clip skip|VAE|Denoising strength|Hires steps)\s*:\s*.+\s*",
+        line,
+        re.IGNORECASE,
+    ))
