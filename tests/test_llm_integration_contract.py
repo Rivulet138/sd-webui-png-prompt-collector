@@ -44,20 +44,18 @@ class IntegrationContractTests(unittest.TestCase):
         self.assertNotIn("collection_task_id = gr.State", ui)
         self.assertIn("is_cancelled=_COLLECTION_CANCEL.is_set", ui)
         self.assertIn("sendBatchToLlm", ui)
-        self.assertIn("sendBatchToRanbooru", ui)
+        self.assertNotIn("sendBatchToRanbooru", ui)
         self.assertIn("llm_prompt_studio_png_batch_payload", js)
-        self.assertIn("ranbooru_prompt_batch_payload", js)
+        self.assertNotIn("ranbooru_prompt_batch_payload", js)
         self.assertIn("Array.isArray(batch?.records) ? batch.records : []", js)
         self.assertIn("const producer = batch?.producer", js)
         self.assertNotIn("slice(0, 200)", js)
 
     def test_receivers_expose_the_same_versioned_json_contract(self):
         llm = (EXTENSIONS / "sd-webui-llm-prompt-studio" / "scripts" / "prompt_studio_ui.py").read_text(encoding="utf-8")
-        ranbooru_ui = (EXTENSIONS / "sd-webui-ranbooru-reforge" / "scripts" / "ranbooru.py").read_text(encoding="utf-8")
         ranbooru_db = (EXTENSIONS / "sd-webui-ranbooru-reforge" / "scripts" / "cache_db.py").read_text(encoding="utf-8")
         self.assertIn('PNG_BATCH_SCHEMA = "prompt_batch.v1"', llm)
         self.assertIn('elem_id="llm_prompt_studio_png_batch_payload"', llm)
-        self.assertIn('elem_id="ranbooru_prompt_batch_payload"', ranbooru_ui)
         self.assertIn('PROMPT_BATCH_SCHEMA = "prompt_batch.v1"', ranbooru_db)
 
 if __name__ == "__main__":

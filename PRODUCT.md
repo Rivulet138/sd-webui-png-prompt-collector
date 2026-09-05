@@ -6,7 +6,7 @@ product
 
 ## Users
 
-Local Stable Diffusion WebUI Forge Neo users who reuse positive prompts from previously generated PNG originals and move those prompts through LLM Prompt Studio or Ranbooru before image generation.
+Local Stable Diffusion WebUI Forge Neo users who reuse positive prompts from previously generated PNG originals and send those prompts to LLM Prompt Studio before image generation.
 
 ## Product Purpose
 

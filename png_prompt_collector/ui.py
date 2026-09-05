@@ -15,7 +15,7 @@ _COLLECTION_CANCEL = threading.Event()
 def create_ui():
     with gr.Blocks(analytics_enabled=False, css=UI_CSS, elem_id="png_prompt_collector") as interface:
         gr.Markdown("## PNG 正向 Prompt 逐图收集器", elem_classes="ppc-heading")
-        gr.Markdown("从 PNG 元数据建立一图一条的 prompt_batch.v1 批次，再发送到 LLM Prompt Studio 或 Ranbooru。", elem_classes="ppc-subheading")
+        gr.Markdown("从 PNG 元数据建立一图一条的 prompt_batch.v1 批次，再发送到 LLM Prompt Studio 处理。", elem_classes="ppc-subheading")
         with gr.Accordion("导入图片或 JSON", open=True, elem_id="ppc_collection_workspace", elem_classes="ppc-workflow-section"):
             with gr.Row(elem_classes="ppc-shell"):
                 with gr.Column(scale=1):
@@ -37,7 +37,6 @@ def create_ui():
         with gr.Accordion("发送到其他扩展", open=True, elem_id="ppc_llm_handoff", elem_classes="ppc-workflow-section"):
             with gr.Row():
                 send_llm = gr.Button("批量发送到 LLM 工作室", variant="primary", elem_id="ppc_send_to_llm")
-                send_ranbooru = gr.Button("批量发送到 Ranbooru", elem_id="ppc_send_to_ranbooru")
             llm_status = gr.HTML(_status("idle", "尚未发送批次", ""), elem_id="ppc_llm_status")
         with gr.Accordion("JSON 导出", open=False, elem_id="ppc_export_result", elem_classes="ppc-workflow-section"):
             export = gr.File(label="导出 prompt_batch.v1 JSON", interactive=False, elem_id="ppc_download")
@@ -49,7 +48,6 @@ def create_ui():
         cancel.click(_cancel, outputs=status, queue=False)
         import_button.click(_import, [json_import], outputs)
         send_llm.click(None, [payload], [llm_status], js="(batch) => window.pngPromptCollector.sendBatchToLlm(batch)")
-        send_ranbooru.click(None, [payload], [llm_status], js="(batch) => window.pngPromptCollector.sendBatchToRanbooru(batch)")
         clear.click(_clear, outputs=[uploads, directory, *outputs, llm_status])
     return [(interface, "PNG Prompt Collector", "png_prompt_collector")]
 

@@ -9,7 +9,7 @@ Forge Neo / AUTOMATIC1111 扩展，用于从历史 PNG 原图逐张读取完整�
 - 一张图片对应一条记录，不拆分、不汇总、不合并不同图片的 Prompt。
 - 可按图片文件内容的 SHA-256 去除重复图片。
 - 支持 `prompt_batch.v1` JSON 导入和导出。
-- 可把完整批次发送到 LLM Prompt Studio 润色/扩写，或发送到 Ranbooru 缓存。
+- 可把完整批次发送到 LLM Prompt Studio 进行转换、扩写和润色。
 - 长批次可取消；已经读取完成的记录会保留。
 
 负面 Prompt 和生成参数不会进入导出结果。
@@ -18,7 +18,7 @@ Forge Neo / AUTOMATIC1111 扩展，用于从历史 PNG 原图逐张读取完整�
 
 1. 选择 PNG 文件，或填写 PNG 目录并按需启用子目录扫描与 SHA-256 去重。
 2. 点击“读取逐图 Prompt”，在结果区确认当前批次数量和失败文件。
-3. 选择“批量发送到 LLM 工作室”进行模型适配的润色/扩写，或选择“批量发送到 Ranbooru”保存原始记录。
+3. 选择“批量发送到 LLM 工作室”进行模型适配的转换、润色或扩写。
 4. 需要离线交接时展开 JSON 导出，文件可再次由三个插件导入。
 
 首屏状态会显示当前批次和下一步操作。没有记录时，读取、导出和交接不会伪造成功；目标扩展未安装时，PNG 读取和 JSON 导入仍可独立使用。
@@ -66,11 +66,7 @@ git clone https://github.com/Rivulet138/sd-webui-png-prompt-collector.git
 ### 发送到其他扩展
 
 - `批量发送到 LLM 工作室`：把整批逐图 Prompt 发送到 LLM Prompt Studio 的 `批处理 > PNG 润色 / 扩写`。LLM 会保持顺序和一图一条关系。
-- `批量发送到 Ranbooru`：把整批记录直接交给 Ranbooru 导入缓存，不经过 LLM 改写。
-
-这两个按钮用途不同：前者用于生成新的润色/扩写结果，后者用于保存和顺序复用原始记录。
-
-未安装目标扩展时，按钮会报告目标不可用；PNG 读取、去重、表格和 JSON 导入导出仍可独立使用。
+未安装 LLM Prompt Studio 时，PNG 读取、去重、表格和 JSON 导入导出仍可独立使用。
 
 ### JSON 导出
 
@@ -98,11 +94,11 @@ git clone https://github.com/Rivulet138/sd-webui-png-prompt-collector.git
 4. 选择润色或扩写并执行批处理。
 5. 使用 LLM 面板的 `追加并下一条`，按顺序写入 txt2img / img2img。
 
-### 发送到 Ranbooru 缓存
+### 发送到 LLM 处理
 
 1. 读取或导入批次。
-2. 点击 `批量发送到 Ranbooru`。
-3. 在 Ranbooru 的 `Tag 缓存管理` 中查看和使用记录。
+2. 点击 `批量发送到 LLM 工作室`。
+3. 在 LLM Prompt Studio 中选择转换、扩写或润色，并按需写入 Forge Prompt。
 
 ## 链路与数据契约
 
@@ -112,8 +108,8 @@ git clone https://github.com/Rivulet138/sd-webui-png-prompt-collector.git
 PNG 文件
   -> Collector 读取完整正向 Prompt
   -> prompt_batch.v1（一图一条）
-  -> LLM Prompt Studio 润色/扩写（可选）
-  -> Ranbooru 缓存或 Forge txt2img / img2img
+  -> LLM Prompt Studio 转换/扩写/润色
+  -> Forge txt2img / img2img
 ```
 
 最小记录结构：
@@ -155,6 +151,6 @@ E:\sd-webui-forge-neo\venv\Scripts\python.exe -m ruff check png_prompt_collector
 E:\sd-webui-forge-neo\venv\Scripts\python.exe -m compileall -q png_prompt_collector scripts tests
 ```
 
-回归测试覆盖 PNG 元数据解析、一图一条、SHA-256 去重、取消、JSON 契约，以及与 LLM Prompt Studio / Ranbooru 的往返联动。
+回归测试覆盖 PNG 元数据解析、一图一条、SHA-256 去重、取消、JSON 契约，以及与 LLM Prompt Studio 的批处理联动。
 
 修改 Python 或 JavaScript 后需要重启 Forge，并执行 `Ctrl + F5`。

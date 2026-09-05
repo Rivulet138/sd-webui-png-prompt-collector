@@ -69,14 +69,8 @@
         setInputValue(input, value);
         if (target.id === "llm_prompt_studio_txt2img_json_batch_payload") openInlineJsonPanel();
         else if (targetId === "llm_prompt_studio_png_batch_payload") openPngBatchStudio();
-        if (targetId === "ranbooru_prompt_batch_payload") {
-            const importButton = appRoot().querySelector("#ranbooru_prompt_batch_import_btn");
-            if (!importButton) return status("error", "Ranbooru 导入按钮不可用", "批次尚未写入缓存。" );
-            importButton.click();
-        }
-        return status("success", `已发送 ${records.length} 条到 ${label}`, targetId === "ranbooru_prompt_batch_payload" ? "已触发 Ranbooru 导入，请查看其导入结果。" : "每张图片仍保持独立记录。" );
+        return status("success", `已发送 ${records.length} 条到 ${label}`, "每张图片仍保持独立记录。" );
     }
     function sendBatchToLlm(batch) { return sendBatch(batch, "llm_prompt_studio_png_batch_payload", "LLM Prompt Studio"); }
-    function sendBatchToRanbooru(batch) { return sendBatch(batch, "ranbooru_prompt_batch_payload", "Ranbooru"); }
-    window.pngPromptCollector = { openPngBatchStudio, sendBatchToLlm, sendBatchToRanbooru };
+    window.pngPromptCollector = { openPngBatchStudio, sendBatchToLlm };
 })();
