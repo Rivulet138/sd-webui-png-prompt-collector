@@ -69,7 +69,7 @@ class PngServiceTests(unittest.TestCase):
                 )
 
             with mock.patch.object(ui, "collect_positive_prompts", side_effect=cancelled_collection):
-                status, rows, batch, exported, errors = ui._collect(
+                status, rows, batch, exported, errors, summary = ui._collect(
                     [str(image)], "", True, True, progress=lambda *_args, **_kwargs: None,
                 )
 
@@ -79,6 +79,7 @@ class PngServiceTests(unittest.TestCase):
             self.assertEqual(errors, "")
             self.assertIn("已完成记录已保留", status)
             self.assertIn("取消时剩余 2 张", status)
+            self.assertIn("当前批次 1 条记录", summary)
 
     def test_reads_only_positive_prompt_from_png_metadata(self):
         with tempfile.TemporaryDirectory() as directory:

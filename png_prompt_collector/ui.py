@@ -15,6 +15,7 @@ _COLLECTION_CANCEL = threading.Event()
 def create_ui():
     with gr.Blocks(analytics_enabled=False, css=UI_CSS, elem_id="png_prompt_collector") as interface:
         gr.Markdown("## PNG 正向 Prompt 逐图收集器", elem_classes="ppc-heading")
+        gr.Markdown("从 PNG 元数据建立一图一条的 prompt_batch.v1 批次，再发送到 LLM Prompt Studio 或 Ranbooru。", elem_classes="ppc-subheading")
         with gr.Accordion("导入图片或 JSON", open=True, elem_id="ppc_collection_workspace", elem_classes="ppc-workflow-section"):
             with gr.Row(elem_classes="ppc-shell"):
                 with gr.Column(scale=1):
@@ -30,6 +31,7 @@ def create_ui():
                     json_import = gr.File(label="导入 prompt_batch.v1 JSON", file_types=[".json"], type="filepath", elem_id="ppc_json_import")
                     import_button = gr.Button("载入 JSON 批次", elem_id="ppc_import_json")
                     status = gr.HTML(_status("idle", "等待导入", ""), elem_id="ppc_collection_status")
+                    summary = gr.HTML(_summary(0), elem_id="ppc_batch_summary")
         with gr.Accordion("逐图正向 Prompt", open=True, elem_id="ppc_records_section", elem_classes="ppc-workflow-section"):
             records = gr.Dataframe(headers=["记录", "序号", "图片", "完整正向 Prompt"], datatype=["str", "number", "str", "str"], interactive=False, wrap=True, elem_id="ppc_prompt_records")
         with gr.Accordion("发送到其他扩展", open=True, elem_id="ppc_llm_handoff", elem_classes="ppc-workflow-section"):
@@ -42,7 +44,7 @@ def create_ui():
         with gr.Accordion("未读取文件", open=False, elem_id="ppc_errors_section", elem_classes="ppc-workflow-section"):
             errors = gr.Textbox(show_label=False, lines=5, interactive=False, elem_id="ppc_errors")
         payload = gr.JSON(value={"schema_version": "prompt_batch.v1", "producer": {"name": "sd-webui-png-prompt-collector"}, "records": []}, elem_id="ppc_prompt_batch_payload", visible=False)
-        outputs = [status, records, payload, export, errors]
+        outputs = [status, records, payload, export, errors, summary]
         collect.click(_collect, [uploads, directory, recursive, deduplicate], outputs)
         cancel.click(_cancel, outputs=status, queue=False)
         import_button.click(_import, [json_import], outputs)
@@ -72,16 +74,16 @@ def _collect(uploaded, directory, recursive, deduplicate, progress=gr.Progress()
             build_result = build_prompt_batch_with_stats(result.records, deduplicate, build_cancelled)
             batch = build_result.batch
         except Exception as exc:
-            return _status("error", "无法建立 JSON 批次", str(exc)), [], _empty_batch(), None, str(exc)
+            return _status("error", "无法建立 JSON 批次", str(exc)), [], _empty_batch(), None, str(exc), _summary(0)
     finally:
         _COLLECTION_CANCEL.clear()
     error_text = "\n".join(result.errors)
     cancelled_count = result.cancelled_count + build_result.cancelled_count
     if not result.selected_count:
-        return _status("idle", "没有待处理的文件", "请选择 PNG 或 JSON"), [], batch, None, error_text
+        return _status("idle", "没有待处理的文件", "请选择 PNG 或 JSON"), [], batch, None, error_text, _summary(0)
     if not batch["records"]:
         headline = "读取已取消" if cancelled_count else "未读取到正向 Prompt"
-        return _status("warning" if cancelled_count else "error", headline, f"已建立 0/{result.imported_count} 条记录"), [], batch, None, error_text
+        return _status("warning" if cancelled_count else "error", headline, f"已建立 0/{result.imported_count} 条记录"), [], batch, None, error_text, _summary(0)
     kind = "warning" if result.skipped_count or cancelled_count else "success"
     duplicates_removed = build_result.processed_count - len(batch["records"])
     detail = f"读取 {result.imported_count} 张；已建立 {build_result.processed_count}/{result.imported_count} 条；当前批次 {len(batch['records'])} 条"
@@ -90,18 +92,18 @@ def _collect(uploaded, directory, recursive, deduplicate, progress=gr.Progress()
     if duplicates_removed:
         detail += f"；去除重复图片 {duplicates_removed} 张"
     headline = "读取已取消，已完成记录已保留" if cancelled_count else "逐图 Prompt 已读取"
-    return _status(kind, headline, detail), _rows(batch), batch, export_prompt_batch(batch) if batch["records"] else None, error_text
+    return _status(kind, headline, detail), _rows(batch), batch, export_prompt_batch(batch) if batch["records"] else None, error_text, _summary(len(batch["records"]))
 
 def _import(value):
     try:
         batch = import_prompt_batch(value)
     except Exception as exc:
         return _status("error", "JSON 导入失败", str(exc)), [], _empty_batch(), None, str(exc)
-    return _status("success", "JSON 批次已载入", f"共 {len(batch['records'])} 条逐图 Prompt"), _rows(batch), batch, export_prompt_batch(batch), ""
+    return _status("success", "JSON 批次已载入", f"共 {len(batch['records'])} 条逐图 Prompt"), _rows(batch), batch, export_prompt_batch(batch), "", _summary(len(batch["records"]))
 
 
 def _clear():
-    return None, "", _status("idle", "等待导入", ""), [], _empty_batch(), None, "", _status("idle", "尚未发送批次", "")
+    return None, "", _status("idle", "等待导入", ""), [], _empty_batch(), None, "", _summary(0), _status("idle", "尚未发送批次", "")
 
 
 def _cancel():
@@ -111,6 +113,10 @@ def _cancel():
 
 def _empty_batch():
     return {"schema_version": "prompt_batch.v1", "producer": {"name": "sd-webui-png-prompt-collector"}, "records": []}
+
+def _summary(count):
+    label = "暂无记录" if not count else f"当前批次 {count} 条记录"
+    return f'<div class="ppc-summary" role="status"><strong>{html.escape(label)}</strong><span>一张图片对应一条正向 Prompt，可直接导出或发送。</span></div>'
 
 def _status(kind, headline, detail):
     safe = kind if kind in {"idle", "success", "warning", "error"} else "idle"

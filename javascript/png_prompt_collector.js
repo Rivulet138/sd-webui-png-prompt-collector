@@ -41,6 +41,16 @@
         const suffix = detail ? `<span>${escapeHtml(detail)}</span>` : "";
         return `<div class="ppc-status ppc-status--${safeKind}" role="status" aria-live="polite"><strong>${escapeHtml(headline)}</strong>${suffix}</div>`;
     }
+    function resolveTarget(targetId) {
+        const root = appRoot();
+        if (targetId === "llm_prompt_studio_png_batch_payload") {
+            // Prefer the dedicated PNG batch workspace. Older Studio builds
+            // only expose the inline JSON receiver, so keep that as fallback.
+            return root.querySelector("#llm_prompt_studio_png_batch_payload")
+                || root.querySelector("#llm_prompt_studio_txt2img_json_batch_payload");
+        }
+        return root.querySelector(`#${targetId}`);
+    }
     function sendBatch(batch, targetId, label) {
         if (typeof batch === "string") {
             try { batch = JSON.parse(batch); }
@@ -48,13 +58,7 @@
         }
         const records = Array.isArray(batch?.records) ? batch.records : [];
         if (!records.length) return status("warning", "没有可发送的逐图 Prompt", "请先导入 PNG 或 JSON 批次。" );
-        const targetSelector = targetId === "llm_prompt_studio_png_batch_payload"
-            ? "#llm_prompt_studio_txt2img_json_batch_payload"
-            : `#${targetId}`;
-        const resolvedTargetId = appRoot().querySelector(targetSelector)
-            ? targetSelector.slice(1)
-            : targetId;
-        const target = appRoot().querySelector(`#${resolvedTargetId}`);
+        const target = resolveTarget(targetId);
         if (!target) return status("error", `未找到 ${label}`, "请确认接收扩展已启用并重新加载 Forge。" );
         const input = target.matches("textarea, input") ? target : target.querySelector("textarea, input");
         if (!input) return status("error", `${label} 接收控件不可用`, "接收扩展没有暴露兼容的 JSON 字段。" );
@@ -63,7 +67,7 @@
             : { name: "sd-webui-png-prompt-collector" };
         const value = JSON.stringify({ schema_version: "prompt_batch.v1", producer, records });
         setInputValue(input, value);
-        if (resolvedTargetId === "llm_prompt_studio_txt2img_json_batch_payload") openInlineJsonPanel();
+        if (target.id === "llm_prompt_studio_txt2img_json_batch_payload") openInlineJsonPanel();
         else if (targetId === "llm_prompt_studio_png_batch_payload") openPngBatchStudio();
         if (targetId === "ranbooru_prompt_batch_payload") {
             const importButton = appRoot().querySelector("#ranbooru_prompt_batch_import_btn");
