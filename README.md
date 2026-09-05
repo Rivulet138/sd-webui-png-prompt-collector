@@ -1,6 +1,6 @@
 # PNG Positive Prompt Collector
 
-Forge Neo / AUTOMATIC1111 扩展，用于从历史 PNG 原图逐张读取完整正向 Prompt，并以“一张图片一条记录”的方式发送给 LLM Prompt Studio 或 Ranbooru。
+Forge Neo / AUTOMATIC1111 扩展，用于从历史 PNG 原图逐张读取完整正向 Prompt，并以“一张图片一条记录”的方式发送给 LLM Prompt Studio。
 
 ## 核心功能
 
