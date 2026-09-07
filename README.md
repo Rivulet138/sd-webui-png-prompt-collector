@@ -92,7 +92,7 @@ git clone https://github.com/Rivulet138/sd-webui-png-prompt-collector.git
 2. 点击 `批量发送到 LLM 工作室`。
 3. 打开 LLM Prompt Studio 的 `批处理 > PNG 润色 / 扩写`。
 4. 选择润色或扩写并执行批处理。
-5. 使用 LLM 面板的 `追加并下一条`，按顺序写入 txt2img / img2img。
+5. 在 LLM 面板勾选需要使用的结果，再点击 `写入所选到正面 Prompt`，结果固定写入 txt2img。
 
 ### 发送到 LLM 处理
 
@@ -109,7 +109,7 @@ PNG 文件
   -> Collector 读取完整正向 Prompt
   -> prompt_batch.v1（一图一条）
   -> LLM Prompt Studio 转换/扩写/润色
-  -> Forge txt2img / img2img
+  -> Forge txt2img 正面 Prompt（显式勾选后写入）
 ```
 
 最小记录结构：
