@@ -146,7 +146,7 @@ def import_prompt_batch(value: str | Path | dict[str, Any]) -> dict[str, Any]:
             if len(processed) > MAX_PROMPT_LENGTH:
                 raise ValueError(f"第 {index} 条处理结果超过 {MAX_PROMPT_LENGTH} 字符")
             normalized_prompt["processed"] = processed
-        for field in ("processed_kind", "output_kind"):
+        for field in ("processed_kind", "output_kind", "processed_preset", "processed_base_model"):
             if field in prompt and prompt[field] is not None:
                 normalized_prompt[field] = str(prompt[field]).strip()
         normalized_image = {"filename": filename, "sha256": sha256}

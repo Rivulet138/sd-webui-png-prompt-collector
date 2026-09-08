@@ -240,6 +240,8 @@ class PngServiceTests(unittest.TestCase):
                 "processed": "A detailed cat.",
                 "processed_kind": "expanded",
                 "output_kind": "positive_prompt",
+                "processed_preset": "Krea 2 Natural",
+                "processed_base_model": "Krea 2",
             })
             record.update({"status": "completed", "error": "", "appended": True, "booru": {"site": "danbooru"}})
             record["source_identity"] = "tags:cat"
@@ -249,6 +251,8 @@ class PngServiceTests(unittest.TestCase):
             self.assertEqual(imported["prompt"]["processed"], "A detailed cat.")
             self.assertEqual(imported["prompt"]["processed_kind"], "expanded")
             self.assertEqual(imported["prompt"]["output_kind"], "positive_prompt")
+            self.assertEqual(imported["prompt"]["processed_preset"], "Krea 2 Natural")
+            self.assertEqual(imported["prompt"]["processed_base_model"], "Krea 2")
             self.assertEqual(imported["status"], "completed")
             self.assertTrue(imported["appended"])
             self.assertEqual(imported["booru"]["site"], "danbooru")
