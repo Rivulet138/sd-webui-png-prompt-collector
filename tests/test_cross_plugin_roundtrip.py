@@ -1,4 +1,3 @@
-import importlib.util
 import json
 import sys
 import tempfile
@@ -11,10 +10,9 @@ from png_prompt_collector.service import build_prompt_batch, import_prompt_batch
 ROOT = Path(__file__).resolve().parents[1]
 EXTENSIONS = ROOT.parent
 STUDIO_ROOT = EXTENSIONS / "sd-webui-llm-prompt-studio"
-RANBOORU_ROOT = EXTENSIONS / "sd-webui-ranbooru-reforge"
 
 
-@unittest.skipUnless(STUDIO_ROOT.is_dir() and RANBOORU_ROOT.is_dir(), "receiver plugins are not installed")
+@unittest.skipUnless(STUDIO_ROOT.is_dir(), "LLM Prompt Studio is not installed")
 class CrossPluginRoundTripTests(unittest.TestCase):
     @staticmethod
     def _load_studio():
@@ -24,18 +22,8 @@ class CrossPluginRoundTripTests(unittest.TestCase):
         import prompt_studio_ui
         return prompt_studio_ui
 
-    @staticmethod
-    def _load_ranbooru_cache():
-        module_path = RANBOORU_ROOT / "scripts" / "cache_db.py"
-        spec = importlib.util.spec_from_file_location("ranbooru_cache_db_roundtrip", module_path)
-        module = importlib.util.module_from_spec(spec)
-        assert spec and spec.loader
-        spec.loader.exec_module(module)
-        return module
-
-    def test_collector_studio_ranbooru_json_round_trip(self):
+    def test_collector_studio_json_round_trip(self):
         studio = self._load_studio()
-        ranbooru = self._load_ranbooru_cache()
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             first, second = root / "one.png", root / "two.png"
@@ -64,17 +52,12 @@ class CrossPluginRoundTripTests(unittest.TestCase):
 
             source = root / "studio.json"
             source.write_text(json.dumps(processed, ensure_ascii=False), encoding="utf-8")
-            manager = ranbooru.TagCacheManager(root / "ranbooru")
-            imported = manager.import_records(str(source), dedupe=True)
-            self.assertEqual(imported["inserted"], 2)
-
-            exported = manager.export_records("json")
-            round_tripped = import_prompt_batch(exported["path"])
-            self.assertEqual([record["record_id"] for record in round_tripped["records"]], [
+            loaded = import_prompt_batch(str(source))
+            self.assertEqual([record["record_id"] for record in loaded["records"]], [
                 collected["records"][0]["record_id"], collected["records"][1]["record_id"],
             ])
             self.assertEqual(
-                [record["prompt"]["processed"] for record in round_tripped["records"]],
+                [record["prompt"]["processed"] for record in loaded["records"]],
                 ["Natural description of same tags.", "Natural description of same tags."],
             )
 

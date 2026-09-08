@@ -35,9 +35,6 @@
         if (toggle && toggle.getAttribute("aria-expanded") !== "true") toggle.click();
         panel.scrollIntoView({ behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
     }
-    function firstByPrefix(prefix) {
-        return appRoot().querySelector(`[id^="${prefix}"]`);
-    }
     function status(kind, headline, detail) {
         const escapeHtml = (value) => String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\"/g, "&quot;").replace(/'/g, "&#39;");
         const safeKind = ["idle", "success", "warning", "error"].includes(kind) ? kind : "idle";
@@ -75,26 +72,5 @@
         return status("success", `已发送 ${records.length} 条到 ${label}`, "每张图片仍保持独立记录。" );
     }
     function sendBatchToLlm(batch) { return sendBatch(batch, "llm_prompt_studio_png_batch_payload", "LLM Prompt Studio"); }
-    function sendBatchToRanbooru(batch) {
-        if (typeof batch === "string") {
-            try { batch = JSON.parse(batch); }
-            catch (_error) { return status("error", "JSON 批次无效", "无法解析当前批次。" ); }
-        }
-        const records = Array.isArray(batch?.records) ? batch.records : [];
-        if (!records.length) return status("warning", "没有可导入的逐图 Prompt", "请先导入 PNG 或 JSON 批次。" );
-        const target = firstByPrefix("ranbooru_prompt_batch_payload");
-        if (!target) return status("error", "未找到 Ranbooru 批次接收控件", "请确认 Ranbooru 已启用并重新加载 Forge。" );
-        const input = target.matches("textarea, input") ? target : target.querySelector("textarea, input");
-        if (!input) return status("error", "Ranbooru 接收控件不可用", "请打开 Ranbooru 的缓存维护面板。" );
-        const producer = batch?.producer && typeof batch.producer === "object"
-            ? batch.producer : { name: "sd-webui-png-prompt-collector" };
-        setInputValue(input, JSON.stringify({ schema_version: "prompt_batch.v1", producer, records }));
-        const importHost = firstByPrefix("ranbooru_prompt_batch_import_btn");
-        const importButton = importHost?.matches("button") ? importHost : importHost?.querySelector("button");
-        if (!importButton) return status("warning", `已准备 ${records.length} 条批次`, "请在 Ranbooru 缓存维护面板点击“导入 Collector 批次”。" );
-        importButton.click();
-        importButton.scrollIntoView?.({ behavior: "smooth", block: "center" });
-        return status("success", `已提交 ${records.length} 条到 Ranbooru`, "Ranbooru 正在导入并按记录去重。" );
-    }
-    window.pngPromptCollector = { openPngBatchStudio, sendBatchToLlm, sendBatchToRanbooru };
+    window.pngPromptCollector = { openPngBatchStudio, sendBatchToLlm };
 })();
